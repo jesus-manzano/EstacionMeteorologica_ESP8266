@@ -1,0 +1,562 @@
+<!DOCTYPE HTML>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+  <script src="https://code.highcharts.com/stock/highstock.js"></script>
+  <script src="https://code.highcharts.com/highcharts-more.js"></script>
+  <script src="https://code.highcharts.com/modules/exporting.js"></script>
+  <script src="https://code.highcharts.com/modules/export-data.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Estilos css concretos */
+
+    .highcharts-data-table {
+      max-height: 400px !important;
+      margin: 16px !important;
+      margin-bottom: 16px !important;
+      overflow-y: auto !important;
+      width: 50%;
+    }
+
+    @media (max-width: 1000px) {
+      .highcharts-data-table {
+        width: 100%;
+      }
+    }
+
+    .highcharts-data-table table {
+      border-collapse: collapse;
+      border-spacing: 0;
+      background: white;
+      min-width: 100%;
+      font-family: sans-serif;
+      font-size: 0.8em;
+    }
+
+    .highcharts-data-table td,
+    .highcharts-data-table th,
+    .highcharts-data-table caption {
+      text-align: center;
+      border: 1px solid silver;
+      padding: 0.5em;
+    }
+
+    .highcharts-data-table tr:nth-child(even),
+    .highcharts-data-table thead tr {
+      background: #f8f8f8;
+    }
+
+    .highcharts-data-table tr {
+      cursor: pointer;
+    }
+
+    .highcharts-data-table tr:hover {
+      background: #eff;
+    }
+
+    .highcharts-data-table caption {
+      border-bottom: none;
+      font-size: 1.1em;
+      font-weight: bold;
+    }
+
+    #grafico,
+    #temperatura,
+    #humedad,
+    #luminosidad {
+      max-height: 432px;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-100 dark:bg-gray-800">
+
+  <!-- Contenedor principal usando flex y flex-wrap para que el contenido se distribuya en filas -->
+  <div class="flex flex-wrap justify-center sm:flex-row md:flex-row lg:flex-row">
+
+    <!-- Título de la estación meteorológica -->
+    <h1 class="my-4 w-full text-2xl font-extrabold text-center text-gray-900 dark:text-white md:text-4xl lg:text-5xl">
+      <span class="text-transparent bg-clip-text bg-gradient-to-r to-emerald-600 from-sky-400">Estación Meteorológica
+        Inteligente</span> con Control de Calefacción.
+    </h1>
+    <p class="mb-4 w-full text-lg text-center font-normal text-gray-500 lg:text-xl dark:text-gray-400">Este sitio web
+      permite
+      visualizar los datos tomados por la estación meteorológica y controlar un sistema de calefacción</p>
+    <div class="w-full flex justify-end">
+      <button id="export-pdf" class="mr-4">Exportar todo a PDF</button>
+    </div>
+
+    <!-- Gráficos para las mediciones -->
+    <div id="grafico" class="container highcharts-figure p-4 md:w-1/2 lg:w-1/2 [&>*]:shadow-lg [&>*]:rounded-2xl"></div>
+    <div id="temperatura" class="container highcharts-figure p-4 md:w-1/2 lg:w-1/2 [&>*]:shadow-lg [&>*]:rounded-2xl">
+    </div>
+    <div id="humedad" class="container highcharts-figure p-4 md:w-1/2 lg:w-1/2 [&>*]:shadow-lg [&>*]:rounded-2xl"></div>
+    <div id="luminosidad" class="container highcharts-figure p-4 md:w-1/2 lg:w-1/2 [&>*]:shadow-lg [&>*]:rounded-2xl">
+    </div>
+
+    <!-- Menú de control del sistema de calefacción -->
+    <div class="p-4 w-full md:w-1/2 lg:w-1/2">
+      <div class="w-full flex items-center justify-center flex-col bg-white shadow-lg rounded-2xl">
+        <div id="tempAnalog" class="w-full rounded-2xl"></div>
+        <p class="mb-2 text-xl font-extrabold">Establecer Temperatura</p>
+        <p id="temperatureDisplay" class="mb-2 text-xl font-extrabold">25.0 ºC</p>
+        <input id="temperatureSlider" class="mb-2" type="range" min="10.0" max="40.0" step="0.1" />
+
+        <!-- Botón activación/desactivación del sistema inteligente de control de calefacción -->
+        <div class=" mb-2 flex items-center">
+          <p class="mr-2 text-lg font-normal text-gray-500">OFF</p>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input id="botonCalefaccion" type="checkbox" value="" class="sr-only peer">
+            <div
+              class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 
+              dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full 
+              rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] 
+              after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border 
+              after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600">
+            </div>
+          </label>
+          <p class="ml-2 text-md font-normal text-gray-500">ON</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+
+<script>
+  // Conectar al servidor WebSocket en el ESP8266
+  const socket = new WebSocket('ws://estacionmeteorologica.local:81/');
+
+  socket.onopen = function (event) {
+    console.log('Conexión WebSocket establecida');
+    // Mensaje vacío para obtener valores del servidor actuales
+    const message = {
+      type: '',
+    };
+    socket.send(JSON.stringify(message));
+  };
+
+  // Vectores para almacenar los datos
+  const temperaturaData = [];
+  const humedadData = [];
+  const luminosidadData = [];
+
+  // Plantilla para el gráfico
+  const options = {
+    chart: {
+      type: 'line', // Tipo de gráfico (puede ser 'bar', 'pie', etc.)
+      renderTo: 'container',
+      zoomType: 'x',
+      zooming: {
+        mouseWheel: false
+      },
+      events: {
+        redraw: function () {
+          this.yAxis[0].removePlotLine();
+          this.yAxis[0].addPlotLine({
+            value: this.yAxis[0].getExtremes().dataMax,
+            color: 'red',
+            dashStyle: 'shortdash',
+            width: 2,
+            label: {
+              text: 'Valor Máximo: ' + this.yAxis[0].getExtremes().dataMax,
+              style: { color: 'red' },
+              id: 'plotlinemax',
+              x: 30
+            }
+          });
+          this.yAxis[0].addPlotLine({
+            value: this.yAxis[0].getExtremes().dataMin,
+            color: 'blue',
+            dashStyle: 'shortdash',
+            width: 2,
+            label: {
+              text: 'Valor Mínimo: ' + this.yAxis[0].getExtremes().dataMin,
+              style: { color: 'blue' },
+              id: 'plotlinemin',
+              x: 30
+            }
+          });
+        },
+      },
+    },
+    navigator: {
+      enabled: true,
+      xAxis: {
+        labels: {
+          enabled: false, // Desactivar los valores en el navigator
+        },
+      },
+    },
+    title: {
+      text: 'Datos Ambientales', // Título del gráfico
+    },
+    xAxis: {
+      categories: ['0', '1', '2'], // Categorías en el eje X
+    },
+    yAxis: {
+      title: {
+        text: 'Valor', // Título del eje Y
+      },
+    },
+    series: [],
+    credits: {
+      text: 'estacionmeteorologica.local',
+      href: 'http://estacionmeteorologica.local'
+    },
+  };
+
+  // Creamos el gráfico de temperatura usando la plantilla
+  options.series.push({
+    name: 'Temperatura',
+    data: temperaturaData,
+  });
+  const chartTemperatura = Highcharts.chart('temperatura', options);
+  chartTemperatura.setTitle({ text: 'Temperatura' });
+  chartTemperatura.series[0].update({
+    marker: {
+      symbol: 'circle', // Cambiar el símbolo del marcador
+    },
+    color: 'red', // Color de la línea
+  });
+  options.series.pop()
+
+  // Creamos el gráfico de humedad usando la plantilla
+  options.series.push({
+    name: 'Humedad',
+    data: humedadData,
+  });
+  const chartHumedad = Highcharts.chart('humedad', options);
+  chartHumedad.setTitle({ text: 'Humedad' });
+  chartHumedad.series[0].update({
+    marker: {
+      symbol: 'diamond', // Cambiar el símbolo del marcador
+    },
+  });
+  options.series.pop()
+
+  // Creamos el gráfico de luminosidad usando la plantilla
+  options.series.push({
+    name: 'Luminosidad',
+    data: luminosidadData,
+
+  });
+  const chartLuminosidad = Highcharts.chart('luminosidad', options);
+  chartLuminosidad.setTitle({ text: 'Luminosidad' });
+  chartLuminosidad.series[0].update({
+    marker: {
+      symbol: 'square', // Cambiar el símbolo del marcador
+    },
+    color: 'green', // Color de la línea
+  });
+  options.series.pop()
+
+  // Eliminamos la parte de máximos y mínimos
+  delete options.chart.events;
+
+  // Creamos el gráfico general usando la plantilla
+  options.series.push({
+    name: 'Temperatura',
+    data: temperaturaData,
+    marker: {
+      symbol: 'circle',
+    },
+    color: 'red',
+  },
+    {
+      name: 'Humedad',
+      data: humedadData,
+      marker: {
+        symbol: 'diamond',
+      },
+    },
+    {
+      name: 'Luminosidad',
+      data: luminosidadData,
+      marker: {
+        symbol: 'square',
+      },
+      color: 'green',
+    });
+  const chartGeneral = Highcharts.chart('grafico', options);
+
+  const chartTempAnalog = Highcharts.chart('tempAnalog', {
+    chart: {
+      type: 'gauge',
+      plotBackgroundColor: null,
+      plotBackgroundImage: null,
+      plotBorderWidth: 0,
+      plotShadow: false,
+      height: '80%'
+    },
+
+    title: {
+      text: 'Sistema Calefacción'
+    },
+
+    pane: {
+      startAngle: -90,
+      endAngle: 89.9,
+      background: null,
+      center: ['50%', '75%'],
+      size: '110%'
+    },
+
+    // the value axis
+    yAxis: {
+      min: 0,
+      max: 50,
+      tickPixelInterval: 72,
+      tickPosition: 'inside',
+      tickColor: Highcharts.defaultOptions.chart.backgroundColor || '#FFFFFF',
+      tickLength: 20,
+      tickWidth: 2,
+      minorTickInterval: null,
+      labels: {
+        distance: 20,
+        style: {
+          fontSize: '14px'
+        }
+      },
+      lineWidth: 0,
+      plotBands: [{
+        from: 0,
+        to: 30,
+        color: '#55BF3B', // green
+        thickness: 20
+      }, {
+        from: 30,
+        to: 40,
+        color: '#DDDF0D', // yellow
+        thickness: 20
+      }, {
+        from: 40,
+        to: 50,
+        color: '#DF5353', // red
+        thickness: 20
+      }]
+    },
+
+    series: [{
+      name: 'TemperaturaActual',
+      data: [25],
+      tooltip: {
+        valueSuffix: ' ºC'
+      },
+      dataLabels: {
+        format: 'Temperatura actual: {y} ºC',
+        borderWidth: 0,
+        color: (
+          Highcharts.defaultOptions.title &&
+          Highcharts.defaultOptions.title.style &&
+          Highcharts.defaultOptions.title.style.color
+        ) || '#333333',
+        style: {
+          fontSize: '16px'
+        },
+        y: 10 // Separación vertical
+      },
+      dial: {
+        radius: '80%',
+        backgroundColor: 'gray',
+        baseWidth: 12,
+        baseLength: '0%',
+        rearLength: '0%'
+      }
+    },
+    {
+      name: 'TemperaturaFijada',
+      data: [25],
+      tooltip: {
+        valueSuffix: ' ºC'
+      },
+      dataLabels: {
+        format: 'Temperatura establecida: {y} ºC',
+        borderWidth: 0,
+        color: (
+          Highcharts.defaultOptions.title &&
+          Highcharts.defaultOptions.title.style &&
+          Highcharts.defaultOptions.title.style.color
+        ) || '#333333',
+        style: {
+          fontSize: '16px'
+        },
+        y: 60 // Separación vertical
+      },
+      dial: {
+        radius: '80%',
+        backgroundColor: 'black',
+        baseWidth: 12,
+        baseLength: '0%',
+        rearLength: '0%'
+      },
+      pivot: {
+        backgroundColor: 'black',
+        radius: 6
+      },
+    }],
+
+    exporting: {
+      enabled: false
+    },
+
+    credits: {
+      enabled: false
+    },
+  });
+
+  /* Actualiza el gráfico analógico de temperatura */
+  function actualizarGraficoAnalog(serieNombre, nuevoValor) {
+    const chart = chartTempAnalog;
+    if (chart && !chart.renderer.forExport) {
+      const point = chart.series.find(serie => serie.name === serieNombre).points[0];
+      const valorFloat = parseFloat(nuevoValor);
+
+      point.update(valorFloat);
+    }
+  }
+
+  // Obtener referencias a los elementos del DOM
+  const temperatureDisplay = document.getElementById('temperatureDisplay');
+  const temperatureSlider = document.getElementById('temperatureSlider');
+
+  // Agregar un evento de escucha al slider
+  temperatureSlider.addEventListener('input', function () {
+    // Obtener el valor actual del slider
+    const currentTemperature = temperatureSlider.value;
+
+    // Actualizar el texto del párrafo con el nuevo valor
+    temperatureDisplay.textContent = `${currentTemperature} ºC`;
+    // Actualizar el dial del gráfico
+    actualizarGraficoAnalog('TemperaturaFijada', currentTemperature);
+
+    // Enviar el nuevo valor al ESP8266
+    const message = {
+      type: 'temperature',
+      value: currentTemperature
+    };
+    socket.send(JSON.stringify(message));
+  });
+
+  // Control para activar/desactivar sistema de calefacción
+  const botonCalefaccion = document.getElementById('botonCalefaccion');
+
+  // Agregar un evento de escucha al cambio de estado del checkbox
+  botonCalefaccion.addEventListener('change', function () {
+    const isChecked = botonCalefaccion.checked;
+
+    // Enviar el nuevo estado al ESP8266
+    const message = {
+      type: 'calefaccion',
+      value: isChecked
+    };
+    socket.send(JSON.stringify(message));
+  });
+
+  // Control para obtener un pdf con todos los gráficos
+  Highcharts.getSVG = function (charts) {
+    var svgArr = [],
+      top = 0,
+      width = 0,
+      endWidth = 0;
+
+    Highcharts.each(charts, function (chart) {
+      var svg = chart.getSVG(),
+        // Get width/height of SVG for export
+        svgWidth = +svg.match(
+          /^<svg[^>]*width\s*=\s*\"?(\d+)\"?[^>]*>/
+        )[1],
+        svgHeight = +svg.match(
+          /^<svg[^>]*height\s*=\s*\"?(\d+)\"?[^>]*>/
+        )[1];
+
+      svg = svg.replace(
+        '<svg',
+        '<g transform="translate(' + width + ', ' + top + ')" '
+      );
+
+      svg = svg.replace('</svg>', '</g>');
+
+      width += svgWidth;
+      endWidth = Math.max(endWidth, width)
+
+      if (width === 2 * svgWidth) {
+        width = 0;
+        top += svgHeight;
+      }
+
+      svgArr.push(svg);
+    });
+    top += 500;
+    return '<svg height="' + top + '" width="' + endWidth +
+      '" version="1.1" xmlns="http://www.w3.org/2000/svg">' +
+      svgArr.join('') + '</svg>';
+  };
+
+  Highcharts.exportCharts = function (charts, options) {
+    // Merge the options
+    options = Highcharts.merge(Highcharts.getOptions().exporting, options);
+
+    // Post to export server
+    Highcharts.post(options.url, {
+      filename: options.filename || 'Datos recogidos',
+      type: options.type,
+      width: options.width,
+      svg: Highcharts.getSVG(charts)
+    });
+  };
+
+  $('#export-pdf').click(function () {
+    Highcharts.exportCharts([chartGeneral, chartTemperatura,
+      chartHumedad, chartLuminosidad, chartTempAnalog], {
+      type: 'application/pdf'
+    });
+  });
+
+  // Configurar el evento de recepción de datos
+  socket.onmessage = function (event) {
+
+    // Event.data contiene los nuevos datos en formato de cadena
+    var data = JSON.parse(event.data);
+
+    if('sActivado' in data){
+      actualizarGraficoAnalog('TemperaturaFijada', data.tFijada);
+      temperatureSlider.value = data.tFijada;
+      if(data.sActivado==0) botonCalefaccion.checked=false;
+      else botonCalefaccion.checked=true;
+      temperatureDisplay.textContent = `${data.tFijada} ºC`;
+    } else {
+      // Actualizar los arrays de datos
+      temperaturaData.push(parseFloat(data.temperatura));
+      humedadData.push(parseFloat(data.humedad));
+      luminosidadData.push(parseFloat(data.luminosidad));
+
+      // Actualizar todos los valores de los gráficos
+      chartTemperatura.series[0].setData(temperaturaData);
+      chartHumedad.series[0].setData(humedadData);
+      chartLuminosidad.series[0].setData(luminosidadData);
+      chartGeneral.series[0].setData(temperaturaData);
+      chartGeneral.series[1].setData(humedadData);
+      chartGeneral.series[2].setData(luminosidadData);
+      actualizarGraficoAnalog('TemperaturaActual', data.temperatura);
+      
+      // Obtener el índice del último dato y calcular el extremo izquierdo del eje X
+      if (temperaturaData.length == 102) {
+        const ultimoIndice = temperaturaData.length - 1;
+        const extremoIzquierdo = Math.max(0, ultimoIndice - 100);
+
+        // Establecer manualmente los extremos del eje X para mantener el zoom en los últimos 30 puntos
+        chartTemperatura.xAxis[0].setExtremes(extremoIzquierdo, ultimoIndice);
+        chartHumedad.xAxis[0].setExtremes(extremoIzquierdo, ultimoIndice);
+        chartLuminosidad.xAxis[0].setExtremes(extremoIzquierdo, ultimoIndice);
+        chartGeneral.xAxis[0].setExtremes(extremoIzquierdo, ultimoIndice);
+      }
+    }
+  }
+
+</script>
+
+</html>
