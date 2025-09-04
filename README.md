@@ -1,30 +1,35 @@
-# Estación Meteorológica Inteligente con Control de Calefacción
+# 🌦️ Estación Meteorológica Inteligente con Control de Calefacción
 
-Este proyecto presenta una Estación Meteorológica Inteligente basada en el microcontrolador ESP8266, diseñada para monitorear y visualizar datos ambientales en tiempo real, así como controlar un sistema de calefacción. La estación mide la temperatura, humedad y luminosidad del entorno, proporcionando una interfaz web interactiva para el usuario.
+Este proyecto presenta una **Estación Meteorológica Inteligente** basada en el microcontrolador **ESP8266**, diseñada para monitorear y visualizar datos ambientales en tiempo real, así como controlar un sistema de calefacción.  
+La estación mide **temperatura, humedad y luminosidad**, proporcionando una interfaz web interactiva para el usuario.
 
-## Características Principales
+---
 
-### 1. Monitoreo Ambiental
-- La estación utiliza un sensor DHT22 para medir la temperatura y la humedad.
-- La luminosidad se mide mediante un sensor LDR (Resistor Dependiente de la Luz).
+## ✨ Características Principales
 
-### 2. Interfaz Web
-- Se ha implementado una interfaz web moderna y receptiva para visualizar los datos recopilados.
-- Los datos se presentan en gráficos interactivos utilizando la biblioteca Highcharts.
-- La interfaz permite la actualización en tiempo real de las mediciones y la visualización de históricos.
+### 🔍 Monitoreo Ambiental
+- Sensor **DHT22** para medir temperatura y humedad.
+- Sensor **LDR** para medir la luminosidad del entorno.
 
-### 3. Control de Calefacción
-- El sistema incluye la capacidad de establecer una temperatura objetivo para el entorno.
-- Se puede activar o desactivar un sistema de calefacción basado en la temperatura ambiente.
-- Un gráfico análogo muestra la temperatura actual y la temperatura fijada.
+### 🖥️ Interfaz Web
+- Interfaz web moderna y responsiva.
+- Gráficos interactivos en tiempo real con **Highcharts**.
+- Visualización de históricos de mediciones.
 
-### 4. Exportación a PDF
-- Proporciona una funcionalidad de exportación que permite generar un archivo PDF con todos los gráficos.
-- Útil para el análisis de datos y el almacenamiento de registros.
+### 🔥 Control de Calefacción
+- Posibilidad de fijar una **temperatura objetivo**.
+- Activación/desactivación automática de la calefacción según la temperatura ambiente.
+- Visualización de temperatura actual vs. temperatura fijada.
 
-## Instalación
+### 📄 Exportación de Datos
+- Funcionalidad para **exportar todos los gráficos a PDF**.
+- Ideal para análisis y almacenamiento de registros históricos.
 
-### Requisitos Previos
+---
+
+## ⚙️ Instalación
+
+### 📋 Requisitos Previos
 
 - [Arduino IDE](https://www.arduino.cc/en/software)
 - [ESP8266 Board Support Package](https://github.com/esp8266/Arduino#installing-with-boards-manager)
@@ -32,53 +37,65 @@ Este proyecto presenta una Estación Meteorológica Inteligente basada en el mic
 - [ArduinoJson Library](https://arduinojson.org/)
 - [DHT Library](https://github.com/adafruit/DHT-sensor-library)
 - [WebSockets Library](https://github.com/Links2004/arduinoWebSockets)
-- [Highcharts Library](https://www.highcharts.com/blog/news/249-highcharts-arduino-library-v1-0-released)
+- [Highcharts Library](https://www.highcharts.com/)
 
-### Pasos de Instalación
+### 🛠️ Pasos de Instalación
 
-1. **Clonar o Descargar el Repositorio:**
+1. **Clonar o descargar el repositorio:**
    ```bash
    git clone https://gitlab.com/ejemplos_arduino/estacionmeteorologica.git
+    ```
+
+## 📡 Obtención y envío de datos
+
+La estación meteorológica recoge datos de los sensores conectados al **ESP8266** y los envía a la interfaz web en tiempo real mediante **WebSockets**.
+
+### 🔍 Proceso interno
+
+1. **Lectura de sensores (cada 4 segundos):**
+   - `DHT22` → temperatura (`t`) y humedad (`h`).  
+   - `LDR` → luminosidad (`l`).  
+   - Los valores se almacenan en variables globales.
+
+   ```cpp
+   h = dht.readHumidity();
+   t = dht.readTemperature();
+   l = 1024 - analogRead(PIN_LDR);
    ```
 
-2. **Configurar Arduino IDE:**
-   - Abrir el archivo `EstacionMeteorologica.ino` en Arduino IDE.
-   - Configurar las credenciales de red (`ssid` y `password`) en el código.
+2. **Control de calefacción automático:**
 
-3. **Instalar Bibliotecas Necesarias:**
-   - En Arduino IDE, ir a "Sketch" -> "Include Library" -> "Manage Libraries..."
-   - Buscar y instalar las siguientes bibliotecas:
-      - LittleFS
-      - ArduinoJson
-      - DHT Sensor Library
-      - Arduino WebSockets
-      - Highcharts
+    Actúa en consecuencia comparando la temperatura ambiente con la fijada.
 
-4. **Seleccionar Placa y Puerto:**
-   - En Arduino IDE, seleccionar la placa ESP8266 adecuada y el puerto al que está conectado el dispositivo.
+    ```cpp
+   controlSistemaCalefaccion();
+   ```
 
-5. **Subir el Código:**
-   - Hacer clic en "Subir" para cargar el código en el ESP8266.
+3. **Creación del mensaje JSON**
 
-6. **Acceder a la Interfaz Web:**
-   - Después de cargar el código con éxito, abrir el Monitor Serie en Arduino IDE para obtener la dirección IP asignada al ESP8266.
-   - Abrir un navegador web y acceder a esa dirección IP.
+    ```cpp
+   String jsonData = "{\"temperatura\":" + String(t) + 
+                  ",\"humedad\":" + String(h) + 
+                  ",\"luminosidad\":" + String(l) + "}";
+   ```
 
-## Uso
+4. **Envío por WebSocket**
 
-- La interfaz web mostrará gráficos en tiempo real de temperatura, humedad y luminosidad.
-- Se puede establecer la temperatura objetivo y activar/desactivar el sistema de calefacción mediante la interfaz.
-- La opción "Exportar todo a PDF" permite generar un archivo PDF con todos los gráficos actuales.
+    El JSON se transmite a todos los clientes conectados en tiempo real.
 
-## Configuración Adicional
+    ```cpp
+   webSocket.broadcastTXT(jsonData);
+   ```
 
-- La carpeta `data` contiene el archivo `index.html`, que define la interfaz web. Puedes personalizar este archivo según tus necesidades.
-- Asegúrate de tener una conexión Wi-Fi estable para que el ESP8266 pueda comunicarse con la interfaz web.
+5. **Obtención de datos**
 
-## Contribuciones
+    El cliente recibirá los datos y son interpretados por la interfaz web, que actualiza los gráficos en tiempo real y permite al usuario visualizar el estado ambiental y controlar la calefacción.
 
-¡Las contribuciones son bienvenidas! Si encuentras problemas o tienes ideas para mejorar el proyecto, no dudes en abrir problemas o enviar solicitudes de extracción.
-
-## Realizado por
-
-Este proyecto ha sido realizado por Jesús Manzano Álvarez y Jesús Morales Villegas. Alumnos del grado de informática de la Universidad de Jaén, España.
+    Ejemplo:
+    ```
+    {
+    "temperatura": 23.7,
+    "humedad": 42.5,
+    "luminosidad": 680
+    }
+    ```
